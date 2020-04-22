@@ -1,0 +1,20 @@
+{
+  "command": "/home/ops/verdi/ops/alos2-ingest/ingest_alos2_download_url.sh",
+  "imported_worker_files": {
+    "/home/ops/.netrc": "/home/ops/.netrc",
+    "/home/ops/.aws": "/home/ops/.aws"
+  },
+  "recommended-queues" : [
+    "factotum-job_worker-large",
+    "factotum-job_worker-small"
+  ],
+  "disk_usage": "200GB",
+  "soft_time_limit": 36000,
+  "time_limit": 40000,
+  "params" : [
+    {
+      "name": "download_url",
+      "destination": "context"
+    }
+  ]
+}
