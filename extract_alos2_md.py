@@ -120,7 +120,7 @@ def get_alos2_obj(dir_name):
     return track
 
 
-def create_alos2_md_json(dirname):
+def create_alos2_md_isce(dirname, filename):
     track = get_alos2_obj(dirname)
 
     bbox, sensingStart, sensingEnd = getMetadataFromISCE(track)
@@ -143,13 +143,29 @@ def create_alos2_md_json(dirname):
     md['satellite_name'] = track.spacecraftName
     md['source'] = "isce_preprocessing"
 
-    return md
-
-def create_alos2_md_isce(dirname, filename):
-    md = create_alos2_md_isce(dirname)
     with open(filename, "w") as f:
         json.dump(md, f, indent=2)
         f.close()
+
+def create_alos2_md_bos(dir_name, filename):
+    img_file = sorted(glob.glob(os.path.join(dir_name, 'IMG*')))
+    geo_server = "https://portal.bostechnologies.com/geoserver/bos/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=bos:sarcat&maxFeatures=50&outputFormat=json"
+    if len(img_file) > 0:
+        m = re.search('IMG-[A-Z]{2}-(ALOS2.{16})-.*', os.path.basename(img_file[0]))
+        id = m.group(1)
+        params = {'cql_filter': "(identifier='{}')".format(id)}
+
+        r = requests.get(geo_server, params, verify=False)
+        r.raise_for_status()
+
+        md = r.json()["features"][0]
+        md['source'] = "bos_sarcat"
+        # move properties a level up
+        md.update(md['properties'])
+        del md['properties']
+        with open(filename, "w") as f:
+            json.dump(md, f, indent=2)
+            f.close()
 
 def cmdLineParse():
     '''
@@ -160,12 +176,24 @@ def cmdLineParse():
             help = 'directory containing the L1.1 ALOS2 CEOS files')
     parser.add_argument('--output', dest='op_json', type=str, default="alos2_md.json",
                         help='json file name to output metadata to')
+    parser.add_argument('--method', dest='method', type=str, default="",
+                        help='either "bos" (to get md from bos) or "isce" (to get md from isce preprocessing) or empty (to get from bos, fallback isce)')
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = cmdLineParse()
-    insar_obj = get_alos2_obj(args.alos2dir)
-    create_alos2_md_isce(insar_obj, args.op_json)
+    if args.method == "bos":
+        create_alos2_md_bos(args.alos2dir, args.op_json)
+    elif args.method == "isce":
+        insar_obj = get_alos2_obj(args.alos2dir)
+        create_alos2_md_isce(insar_obj, args.op_json)
+    else:
+        try:
+            create_alos2_md_bos(args.alos2dir, args.op_json)
+        except Exception as e:
+            print("Got exception trying to query bos sarcat: %s" % str(e))
+            # use isce if we are unable to get the bbox from bos
+            create_alos2_md_isce(args.alos2dir, args.op_json)
 
 
 
